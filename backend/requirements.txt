@@ -6,3 +6,6 @@ pyserial
 scikit-learn
 xgboost
 numpy
+sqlalchemy[asyncio]
+asyncpg
+pydantic-settings

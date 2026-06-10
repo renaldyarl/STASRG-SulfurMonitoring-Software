@@ -4,6 +4,8 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import SensorStatusBadge from "./SensorStatusBadge";
+import { isNodeActive, useNow } from "../lib/sensorStatus";
 
 // ─── Marker icons ───────────────────────────────────────────────────────────
 const DefaultIcon = L.icon({
@@ -21,14 +23,49 @@ const SelectedIcon = L.icon({
     className: "selected-marker",
 });
 
+// Greyed-out marker for nodes that aren't receiving data.
+const InactiveIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    className: "inactive-marker",
+});
+
 L.Marker.prototype.options.icon = DefaultIcon;
 
+// ─── Locked Kawah Putih view ────────────────────────────────────────────────
+// The map is pinned to a fixed 4x4 OSM tile area around the crater and made
+// fully static (no panning / no zooming).
+const KAWAH_PUTIH_CENTER = [-7.166098, 107.402478]; // exact crater anchor
+const LOCKED_ZOOM = 18;
+const GRID_TILES = 4;
+const TILE_PX = 256;
+
+// Build the [SW, NE] bounds covering exactly GRID_TILES x GRID_TILES tiles
+// centered on `center`, using Leaflet's Web Mercator projection.
+function getTileGridBounds(center, zoom = LOCKED_ZOOM, tiles = GRID_TILES) {
+    const crs = L.CRS.EPSG3857;
+    const half = (tiles * TILE_PX) / 2; // half the grid, in pixels
+    const c = crs.latLngToPoint(L.latLng(center[0], center[1]), zoom);
+    const nw = crs.pointToLatLng(L.point(c.x - half, c.y - half), zoom);
+    const se = crs.pointToLatLng(L.point(c.x + half, c.y + half), zoom);
+    return [
+        [se.lat, nw.lng], // SW corner
+        [nw.lat, se.lng], // NE corner
+    ];
+}
+
 // ─── Map view updater ───────────────────────────────────────────────────────
-function ChangeView({ center }) {
+// Fit the 4x4 tile grid to fill the whole panel; re-fit when the panel resizes.
+function FitGrid({ bounds }) {
     const map = useMap();
     useEffect(() => {
-        map.setView(center);
-    }, [center, map]);
+        const fit = () => map.fitBounds(bounds, { padding: [0, 0], animate: false });
+        fit();
+        map.on("resize", fit);
+        return () => map.off("resize", fit);
+    }, [bounds, map]);
     return null;
 }
 
@@ -39,52 +76,58 @@ const GpsDashboard = ({
     selectedNodeId = null,
     onNodeSelect,
 }) => {
-    // Center the map on the middle of all sensor nodes
-    const mapCenter =
-        sensorNodes.length > 0
-            ? [
-                  sensorNodes.reduce((sum, n) => sum + n.lat, 0) / sensorNodes.length,
-                  sensorNodes.reduce((sum, n) => sum + n.lng, 0) / sensorNodes.length,
-              ]
-            : [-7.167, 107.403];
+    // Map is pinned to the exact crater coordinate, not the average of nodes.
+    const mapCenter = KAWAH_PUTIH_CENTER;
 
-    // Determine marker color based on gas levels
-    const getStatusColor = (data) => {
-        if (!data) return "text-gray-400";
-        if (data.so2 > 50 || data.h2s > 50) return "text-red-500";
-        if (data.so2 > 30 || data.h2s > 30) return "text-amber-500";
-        return "text-emerald-500";
-    };
+    // Fixed 4x4 tile area around that center that the map is locked to.
+    const gridBounds = getTileGridBounds(mapCenter);
 
-    const getStatusLabel = (data) => {
-        if (!data) return "No Data";
-        if (data.so2 > 50 || data.h2s > 50) return "Danger";
-        if (data.so2 > 30 || data.h2s > 30) return "Caution";
-        return "Safe";
-    };
+    // Ticking clock so markers grey out once a node's data goes stale.
+    const now = useNow();
 
     return (
         <div className="w-full h-full min-h-125 z-0">
             <MapContainer
                 center={mapCenter}
-                zoom={17}
-                scrollWheelZoom={true}
+                zoom={LOCKED_ZOOM}
+                minZoom={16}
+                maxZoom={18}
+                dragging={false}
+                scrollWheelZoom={false}
+                doubleClickZoom={false}
+                touchZoom={false}
+                boxZoom={false}
+                keyboard={false}
                 style={{ height: "100%", width: "100%" }}
                 zoomControl={false}
-                attributionControl={false}
+                attributionControl={true}
             >
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <ChangeView center={mapCenter} />
+                {/* Tiles (Esri World Imagery) are served from public/tiles (bundled)
+                    so the map works fully offline. Run `npm run tiles` to populate. */}
+                <TileLayer
+                    url="/tiles/{z}/{x}/{y}.jpg"
+                    minZoom={16}
+                    maxZoom={18}
+                    attribution="&copy; Esri"
+                    errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                />
+                <FitGrid bounds={gridBounds} />
 
                 {sensorNodes.map((node) => {
                     const nodeData = nodesData[node.id];
                     const isSelected = String(selectedNodeId) === String(node.id);
+                    const active = isNodeActive(nodeData, now);
+                    const icon = !active
+                        ? InactiveIcon
+                        : isSelected
+                        ? SelectedIcon
+                        : DefaultIcon;
 
                     return (
                         <Marker
                             key={node.id}
                             position={[node.lat, node.lng]}
-                            icon={isSelected ? SelectedIcon : DefaultIcon}
+                            icon={icon}
                             eventHandlers={{
                                 click: () => {
                                     if (onNodeSelect) onNodeSelect(node.id);
@@ -100,26 +143,9 @@ const GpsDashboard = ({
                                         {node.lat.toFixed(6)}°S, {node.lng.toFixed(6)}°E
                                     </p>
 
-                                    {/* Status badge */}
+                                    {/* Active/Inactive badge */}
                                     <div className="flex justify-center mb-1.5">
-                                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                            getStatusColor(nodeData)
-                                        } ${
-                                            getStatusLabel(nodeData) === "Danger"
-                                                ? "bg-red-50"
-                                                : getStatusLabel(nodeData) === "Caution"
-                                                ? "bg-amber-50"
-                                                : "bg-emerald-50"
-                                        }`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${
-                                                getStatusLabel(nodeData) === "Danger"
-                                                    ? "bg-red-500"
-                                                    : getStatusLabel(nodeData) === "Caution"
-                                                    ? "bg-amber-500"
-                                                    : "bg-emerald-500"
-                                            }`} />
-                                            {getStatusLabel(nodeData)}
-                                        </span>
+                                        <SensorStatusBadge active={active} />
                                     </div>
 
                                     {nodeData ? (

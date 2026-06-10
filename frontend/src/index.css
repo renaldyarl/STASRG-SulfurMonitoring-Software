@@ -217,3 +217,9 @@ body {
 .leaflet-container {
     z-index: 1 !important;
 }
+
+/* Inactive sensor markers: greyed out + dimmed */
+.inactive-marker {
+    filter: grayscale(100%);
+    opacity: 0.5;
+}

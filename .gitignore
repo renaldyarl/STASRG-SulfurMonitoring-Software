@@ -7,3 +7,7 @@ dist
 /.cache
 /.vscode
 >>>>>>> 035581b73cdc64f382029971b92a0e8e8338beae
+
+#claude
+ /.claude
+ CLAUDE.md

@@ -43,12 +43,12 @@ def load_all_models():
             try:
                 with open(model_path, "rb") as f:
                     _models[node_id] = pickle.load(f)
-                print(f"  ✓ Loaded model for Node {node_id}: {model_path.name}")
+                print(f"  [OK] Loaded model for Node {node_id}: {model_path.name}")
                 loaded += 1
             except Exception as e:
-                print(f"  ✗ Failed to load model for Node {node_id}: {e}")
+                print(f"  [FAIL] Failed to load model for Node {node_id}: {e}")
         else:
-            print(f"  ✗ Model file not found for Node {node_id}: {model_path}")
+            print(f"  [FAIL] Model file not found for Node {node_id}: {model_path}")
 
     print(f"--- ML Models: {loaded}/{len(NODE_IDS)} loaded ---")
 

@@ -4,7 +4,8 @@ import ActionCenter from "./ActionCenter";
 import GpsDashboard from "./GpsDashboard";
 import DeviceInfoPanel from "./DeviceInfoPanel";
 import WindCard from "./WindCard";
-import api from "../lib/api";
+import SensorStatusBadge from "./SensorStatusBadge";
+import { isNodeActive, useNow } from "../lib/sensorStatus";
 import React, { useState, useEffect, useCallback } from "react";
 
 // ─── Sensor node definitions (shared with SensorsPage) ─────────────────────
@@ -17,29 +18,6 @@ const SENSOR_NODES = [
     { id: 6, label: "6", lat: -7.166833, lng: 107.404111 },
     { id: "r", label: "R", lat: -7.167099, lng: 107.404272 },
 ];
-
-// ─── Dummy data generator ───────────────────────────────────────────────────
-function generateDummySensorData() {
-    return {
-        so2: +(Math.random() * 40 + 5).toFixed(2),
-        h2s: +(Math.random() * 30 + 2).toFixed(3),
-        wind_speed: +(Math.random() * 10 + 0.5).toFixed(1),
-        wind_dir: +(Math.random() * 360).toFixed(0),
-        bus_voltage: +(Math.random() * 1.5 + 3.0).toFixed(2),
-        current_ma: +(Math.random() * 200 + 50).toFixed(1),
-        temp: +(Math.random() * 8 + 22).toFixed(1),
-        humidity: +(Math.random() * 30 + 50).toFixed(1),
-        timestamp: new Date().toISOString(),
-    };
-}
-
-function generateAllNodesDummyData() {
-    const data = {};
-    SENSOR_NODES.forEach((node) => {
-        data[node.id] = generateDummySensorData();
-    });
-    return data;
-}
 
 // ─── Wind direction helper ──────────────────────────────────────────────────
 const getWindDirection = (deg) => {
@@ -58,22 +36,10 @@ const getWindDirection = (deg) => {
 // ─── Main component ─────────────────────────────────────────────────────────
 const DashboardMainContent = () => {
     const [selectedNode, setSelectedNode] = useState(SENSOR_NODES[0]);
-    const [dataSource, setDataSource] = useState("dummy"); // "dummy" | "live"
-    const [nodesData, setNodesData] = useState(generateAllNodesDummyData);
-
-    // ── Dummy: refresh every 3 seconds ───────────────────────────────────
-    useEffect(() => {
-        if (dataSource !== "dummy") return;
-        setNodesData(generateAllNodesDummyData());
-        const interval = setInterval(() => {
-            setNodesData(generateAllNodesDummyData());
-        }, 3000);
-        return () => clearInterval(interval);
-    }, [dataSource]);
+    const [nodesData, setNodesData] = useState({});
 
     // ── Live: WebSocket ──────────────────────────────────────────────────
     useEffect(() => {
-        if (dataSource !== "live") return;
         const ws = new WebSocket("ws://127.0.0.1:8000/api/ws/sensors");
 
         ws.onmessage = (event) => {
@@ -91,6 +57,7 @@ const DashboardMainContent = () => {
                     temp: data.temp || 0,
                     humidity: data.humidity || 0,
                     timestamp: data.timestamp,
+                    _receivedAt: Date.now(),
                 },
             }));
         };
@@ -98,13 +65,17 @@ const DashboardMainContent = () => {
         ws.onerror = (err) => console.error("WebSocket Error:", err);
         ws.onclose = () => console.log("WebSocket Connection Closed");
         return () => ws.close();
-    }, [dataSource]);
+    }, []);
+
+    // Ticking clock so a node flips back to inactive once its data goes stale.
+    const now = useNow();
 
     // Currently selected node's data
     const sensorData = nodesData[selectedNode.id] || {
         so2: 0, h2s: 0, wind_speed: 0, wind_dir: 0,
         bus_voltage: 0, current_ma: 0, temp: 0, humidity: 0, timestamp: null,
     };
+    const selectedActive = isNodeActive(nodesData[selectedNode.id], now);
     const position = [selectedNode.lat, selectedNode.lng];
 
     const handleNodeSelect = useCallback((nodeId) => {
@@ -121,34 +92,12 @@ const DashboardMainContent = () => {
                     {selectedNode.lng.toFixed(4)}°{selectedNode.lng >= 0 ? "E" : "W"}
                 </div>
 
-                {/* Data source toggle */}
+                {/* Live data indicator */}
                 <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white/80 backdrop-blur rounded-lg px-3 py-1.5 border border-gray-200 shadow-sm">
-                    <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">
-                        Source
-                    </span>
-                    <button
-                        onClick={() => setDataSource("dummy")}
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded transition-all ${
-                            dataSource === "dummy"
-                                ? "bg-gray-800 text-white shadow"
-                                : "text-gray-400 hover:text-gray-600"
-                        }`}
-                    >
-                        Dummy
-                    </button>
-                    <button
-                        onClick={() => setDataSource("live")}
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded transition-all flex items-center gap-1 ${
-                            dataSource === "live"
-                                ? "bg-red-500 text-white shadow"
-                                : "text-gray-400 hover:text-gray-600"
-                        }`}
-                    >
-                        {dataSource === "live" && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        )}
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide">
                         Live
-                    </button>
+                    </span>
                 </div>
 
                 <GpsDashboard
@@ -164,10 +113,13 @@ const DashboardMainContent = () => {
 
                     {/* Node selector header */}
                     <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                            <span className="w-1 h-4 bg-primary rounded-full"></span>
-                            NODE {selectedNode.label} DATA
-                        </h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                <span className="w-1 h-4 bg-primary rounded-full"></span>
+                                NODE {selectedNode.label} DATA
+                            </h2>
+                            <SensorStatusBadge active={selectedActive} />
+                        </div>
                         <select
                             value={selectedNode.id}
                             onChange={(e) => handleNodeSelect(e.target.value)}
@@ -186,28 +138,28 @@ const DashboardMainContent = () => {
                             type="SO2"
                             value={Number(sensorData.so2).toFixed(2)}
                             unit="µg/m³"
-                            period={dataSource === "live" ? "Live" : "Dummy"}
+                            period="Live"
                             status={sensorData.so2 > 50 ? "Danger" : "Normal"}
                         />
                         <GasCard
                             type="H2S"
                             value={Number(sensorData.h2s).toFixed(3)}
                             unit="µg/m³"
-                            period={dataSource === "live" ? "Live" : "Dummy"}
+                            period="Live"
                             status={sensorData.h2s > 50 ? "Caution" : "Normal"}
                         />
                         <GasCard
                             type="WIND SPEED"
                             value={Number(sensorData.wind_speed).toFixed(1)}
                             unit="m/s"
-                            period={dataSource === "live" ? "Live" : "Dummy"}
+                            period="Live"
                             status="Normal"
                         />
                         <WindCard
                             type="WIND DIRECTION"
                             value={getWindDirection(sensorData.wind_dir)}
                             unit="°"
-                            period={dataSource === "live" ? "Live" : "Dummy"}
+                            period="Live"
                             status="Normal"
                         />
                     </div>

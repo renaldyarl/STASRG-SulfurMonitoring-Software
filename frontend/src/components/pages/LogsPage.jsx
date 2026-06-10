@@ -24,27 +24,6 @@ const SENSOR_NODES = [
     { id: "r", label: "Node R" },
 ];
 
-// ─── Dummy data generator (per node, with slight variation) ─────────────────
-function generateDummyData(hours = 24, nodeId = 1) {
-    const data = [];
-    const now = new Date();
-    // Use nodeId as a seed offset so each node has different but consistent data
-    const seed = typeof nodeId === "number" ? nodeId : 7;
-    for (let i = hours; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 60 * 60 * 1000);
-        const noise = Math.sin(i * 0.5 + seed * 2) * 0.3 + 1;
-        data.push({
-            timestamp: time.toISOString(),
-            label: time.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-            so2: +((Math.random() * 40 + 5) * noise).toFixed(2),
-            h2s: +((Math.random() * 30 + 2) * noise).toFixed(3),
-            temp: +((Math.random() * 8 + 22) + seed * 0.3).toFixed(1),
-            humidity: +((Math.random() * 30 + 50) - seed * 0.5).toFixed(1),
-        });
-    }
-    return data;
-}
-
 // ─── Chart card component ───────────────────────────────────────────────────
 const CHART_CONFIGS = [
     {
@@ -257,34 +236,29 @@ const LogsPage = () => {
     const [timeRange, setTimeRange] = useState(24);
     const [logsData, setLogsData] = useState([]);
     const [isLive, setIsLive] = useState(false);
-    const [dataSource, setDataSource] = useState("dummy"); // "dummy" | "backend"
     const [prediction, setPrediction] = useState(null);
     const [predictionLoading, setPredictionLoading] = useState(false);
     const [predictionError, setPredictionError] = useState(null);
 
-    // ── Generate / fetch data ────────────────────────────────────────────
+    // ── Fetch data from backend ──────────────────────────────────────────
     const loadData = useCallback(async () => {
-        if (dataSource === "backend") {
-            try {
-                const res = await api.get("/logs", {
-                    params: { hours: timeRange, node_id: selectedNode.id },
-                });
-                const backendData = res.data.map((d) => ({
-                    ...d,
-                    label: new Date(d.timestamp).toLocaleTimeString("en-GB", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                    }),
-                }));
-                setLogsData(backendData);
-            } catch (err) {
-                console.error("Failed to fetch logs from backend, falling back to dummy:", err);
-                setLogsData(generateDummyData(timeRange, selectedNode.id));
-            }
-        } else {
-            setLogsData(generateDummyData(timeRange, selectedNode.id));
+        try {
+            const res = await api.get("/logs", {
+                params: { hours: timeRange, node_id: selectedNode.id },
+            });
+            const backendData = res.data.map((d) => ({
+                ...d,
+                label: new Date(d.timestamp).toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                }),
+            }));
+            setLogsData(backendData);
+        } catch (err) {
+            console.error("Failed to fetch logs from backend:", err);
+            setLogsData([]);
         }
-    }, [dataSource, timeRange, selectedNode]);
+    }, [timeRange, selectedNode]);
 
     useEffect(() => {
         loadData();
@@ -445,33 +419,6 @@ const LogsPage = () => {
                         </select>
                     </div>
 
-                    {/* Data source toggle */}
-                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
-                        <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">
-                            Source
-                        </span>
-                        <button
-                            onClick={() => setDataSource("dummy")}
-                            className={`text-xs font-medium px-2.5 py-1 rounded-md transition-all ${
-                                dataSource === "dummy"
-                                    ? "bg-white shadow text-gray-800"
-                                    : "text-gray-400 hover:text-gray-600"
-                            }`}
-                        >
-                            Dummy
-                        </button>
-                        <button
-                            onClick={() => setDataSource("backend")}
-                            className={`text-xs font-medium px-2.5 py-1 rounded-md transition-all ${
-                                dataSource === "backend"
-                                    ? "bg-white shadow text-gray-800"
-                                    : "text-gray-400 hover:text-gray-600"
-                            }`}
-                        >
-                            Backend
-                        </button>
-                    </div>
-
                     {/* Time range selector */}
                     <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1.5">
                         {TIME_RANGES.map((r) => (
@@ -557,9 +504,7 @@ const LogsPage = () => {
                 <span>
                     {isLive
                         ? "Streaming live data via WebSocket"
-                        : dataSource === "backend"
-                        ? "Fetched from backend API"
-                        : "Using generated dummy data"}
+                        : "Fetched from backend API"}
                 </span>
                 {logsData.length > 0 && (
                     <>

@@ -17,11 +17,6 @@ const Header = () => {
                     <h2 className="text-xl font-bold tracking-tight text-black">
                         SULFUR MONITORING DASBOARD
                     </h2>
-                    <div className="flex items-center gap-2">
-                        <span className="font-mono mt-0.5 text-white text-xs font-medium uppercase tracking-wider bg-black px-2 py-0.5 rounded-sm">
-                            Demo untuk Tugas Besar D3 Teknologi Komputer
-                        </span>
-                    </div>
                 </div>
             </div>
 

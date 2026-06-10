@@ -4,15 +4,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api import router as api_router, start_serial_worker
 from app.ml_service import load_all_models
+from app.database import init_db, dispose_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("--- APP STARTUP ---")
     print("Loading ML models...")
     load_all_models()
+    await init_db()
     start_serial_worker()
     yield
     print("--- APP SHUTDOWN ---")
+    await dispose_db()
 
 app = FastAPI(title="Sulfur Monitoring API", lifespan=lifespan)
 

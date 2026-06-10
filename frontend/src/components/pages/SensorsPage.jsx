@@ -2,7 +2,9 @@ import GasCard from "../GasCard";
 import EnvironmentPanel from "../EnvironmentPanel";
 import DeviceInfoPanel from "../DeviceInfoPanel";
 import WindCard from "../WindCard";
-import React, { useState, useEffect, useCallback } from "react";
+import SensorStatusBadge from "../SensorStatusBadge";
+import { isNodeActive, useNow } from "../../lib/sensorStatus";
+import React, { useState, useEffect } from "react";
 
 // ─── Sensor node definitions ────────────────────────────────────────────────
 const SENSOR_NODES = [
@@ -15,28 +17,11 @@ const SENSOR_NODES = [
     { id: "r", label: "R", lat: -7.167099, lng: 107.404272 },
 ];
 
-// ─── Dummy data generator (per node) ────────────────────────────────────────
-function generateDummySensorData() {
-    return {
-        so2: +(Math.random() * 40 + 5).toFixed(2),
-        h2s: +(Math.random() * 30 + 2).toFixed(3),
-        wind_speed: +(Math.random() * 10 + 0.5).toFixed(1),
-        wind_dir: +(Math.random() * 360).toFixed(0),
-        bus_voltage: +(Math.random() * 1.5 + 3.0).toFixed(2),
-        current_ma: +(Math.random() * 200 + 50).toFixed(1),
-        temp: +(Math.random() * 8 + 22).toFixed(1),
-        humidity: +(Math.random() * 30 + 50).toFixed(1),
-        timestamp: new Date().toISOString(),
-    };
-}
-
-function generateAllNodesDummyData() {
-    const data = {};
-    SENSOR_NODES.forEach((node) => {
-        data[node.id] = generateDummySensorData();
-    });
-    return data;
-}
+// ─── Empty sensor reading (shown until live data arrives) ───────────────────
+const EMPTY_READING = {
+    so2: 0, h2s: 0, wind_speed: 0, wind_dir: 0,
+    bus_voltage: 0, current_ma: 0, temp: 0, humidity: 0, timestamp: null,
+};
 
 // ─── Wind direction helper ──────────────────────────────────────────────────
 const getWindDirection = (deg) => {
@@ -54,27 +39,10 @@ const getWindDirection = (deg) => {
 
 // ─── Main page ──────────────────────────────────────────────────────────────
 const SensorsPage = () => {
-    const [dataSource, setDataSource] = useState("dummy"); // "dummy" | "live"
-    const [nodesData, setNodesData] = useState(generateAllNodesDummyData);
-
-    // ── Dummy: refresh every 3 seconds ───────────────────────────────────
-    useEffect(() => {
-        if (dataSource !== "dummy") return;
-
-        // Set initial data immediately
-        setNodesData(generateAllNodesDummyData());
-
-        const interval = setInterval(() => {
-            setNodesData(generateAllNodesDummyData());
-        }, 3000);
-
-        return () => clearInterval(interval);
-    }, [dataSource]);
+    const [nodesData, setNodesData] = useState({});
 
     // ── Live: WebSocket streaming ────────────────────────────────────────
     useEffect(() => {
-        if (dataSource !== "live") return;
-
         const ws = new WebSocket("ws://127.0.0.1:8000/api/ws/sensors");
 
         ws.onmessage = (event) => {
@@ -95,6 +63,7 @@ const SensorsPage = () => {
                     temp: data.temp || 0,
                     humidity: data.humidity || 0,
                     timestamp: data.timestamp,
+                    _receivedAt: Date.now(),
                 },
             }));
         };
@@ -103,7 +72,13 @@ const SensorsPage = () => {
         ws.onclose = () => console.log("SensorsPage WS Closed");
 
         return () => ws.close();
-    }, [dataSource]);
+    }, []);
+
+    // Ticking clock so nodes flip back to inactive once their data goes stale.
+    const now = useNow();
+    const activeCount = SENSOR_NODES.filter((n) =>
+        isNodeActive(nodesData[n.id], now)
+    ).length;
 
     return (
         <div className="space-y-6 pb-6">
@@ -116,66 +91,40 @@ const SensorsPage = () => {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    {/* Data source toggle */}
-                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
-                        <span className="text-[10px] text-gray-400 uppercase font-semibold tracking-wide">
-                            Source
-                        </span>
-                        <button
-                            onClick={() => setDataSource("dummy")}
-                            className={`text-xs font-medium px-2.5 py-1 rounded-md transition-all ${
-                                dataSource === "dummy"
-                                    ? "bg-white shadow text-gray-800"
-                                    : "text-gray-400 hover:text-gray-600"
-                            }`}
-                        >
-                            Dummy
-                        </button>
-                        <button
-                            onClick={() => setDataSource("live")}
-                            className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md transition-all ${
-                                dataSource === "live"
-                                    ? "bg-red-500 text-white shadow"
-                                    : "text-gray-400 hover:text-gray-600"
-                            }`}
-                        >
-                            <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                    dataSource === "live" ? "bg-white animate-pulse" : "bg-gray-400"
-                                }`}
-                            />
-                            Live
-                        </button>
-                    </div>
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-xs font-medium text-gray-600">Live</span>
                 </div>
             </div>
 
             {/* Status bar */}
             <div className="flex items-center gap-4 text-xs text-gray-400">
-                <span>{SENSOR_NODES.length} nodes</span>
-                <span>•</span>
                 <span>
-                    {dataSource === "live"
-                        ? "Streaming live data via WebSocket"
-                        : "Using generated dummy data (refreshing every 3s)"}
+                    <span className="font-semibold text-emerald-600">{activeCount}</span>
+                    {" / "}{SENSOR_NODES.length} active
                 </span>
+                <span>•</span>
+                <span>Streaming live data via WebSocket</span>
             </div>
 
             {/* Sensor node cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {SENSOR_NODES.map((node) => {
-                    const data = nodesData[node.id] || generateDummySensorData();
+                    const data = nodesData[node.id] || EMPTY_READING;
+                    const active = isNodeActive(nodesData[node.id], now);
                     return (
                         <div
                             key={node.id}
                             className="border border-gray-300 rounded-2xl flex flex-col min-h-0"
                         >
                             <div className="p-5 flex flex-col justify-between shrink-0">
-                                <h2 className="text-xl text-center font-bold text-gray-800 mb-3 items-center gap-2">
-                                    <span className="w-1 h-4 bg-primary rounded-full"></span>
-                                    SENSOR NODE {node.label}
-                                </h2>
+                                <div className="flex items-center justify-center gap-2 mb-3">
+                                    <h2 className="text-xl text-center font-bold text-gray-800 items-center gap-2">
+                                        <span className="w-1 h-4 bg-primary rounded-full"></span>
+                                        SENSOR NODE {node.label}
+                                    </h2>
+                                    <SensorStatusBadge active={active} />
+                                </div>
                                 <p className="text-xs text-center text-gray-500 mb-4 font-mono">
                                     {node.lat.toFixed(6)}°S, {node.lng.toFixed(6)}°E
                                 </p>
@@ -189,28 +138,28 @@ const SensorsPage = () => {
                                         type="SO2"
                                         value={Number(data.so2).toFixed(2)}
                                         unit="µg/m³"
-                                        period={dataSource === "live" ? "Live" : "Dummy"}
+                                        period="Live"
                                         status={data.so2 > 50 ? "Danger" : "Normal"}
                                     />
                                     <GasCard
                                         type="H2S"
                                         value={Number(data.h2s).toFixed(3)}
                                         unit="µg/m³"
-                                        period={dataSource === "live" ? "Live" : "Dummy"}
+                                        period="Live"
                                         status={data.h2s > 50 ? "Caution" : "Normal"}
                                     />
                                     <GasCard
                                         type="WIND SPEED"
                                         value={Number(data.wind_speed).toFixed(1)}
                                         unit="m/s"
-                                        period={dataSource === "live" ? "Live" : "Dummy"}
+                                        period="Live"
                                         status="Normal"
                                     />
                                     <WindCard
                                         type="WIND DIRECTION"
                                         value={getWindDirection(data.wind_dir)}
                                         unit="°"
-                                        period={dataSource === "live" ? "Live" : "Dummy"}
+                                        period="Live"
                                         status="Normal"
                                     />
                                 </div>
