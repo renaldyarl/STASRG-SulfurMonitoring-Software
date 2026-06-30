@@ -8,7 +8,9 @@ const DeviceInfoPanel = ({ sensorData, position, setPosition }) => {
     const {
         bus_voltage = 0,
         current_ma = 0,
-        battery_pct = 0
+        battery_pct = 0,
+        temp = 0,
+        humidity = 0
     } = sensorData || {};
 
     return (
@@ -40,13 +42,17 @@ const DeviceInfoPanel = ({ sensorData, position, setPosition }) => {
                     <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-gray-400 mb-1">
                         <Thermometer className="w-3 h-3 text-blue-400" /> Temp
                     </div>
-                    <div className="text-xl font-bold text-gray-800">!data</div>
+                    <div className="text-lg font-bold text-gray-800">
+                        {temp ? `${temp.toFixed(1)}°C` : "0.0°C"}
+                    </div>
                 </div>
                 <div className="flex flex-col gap-1 p-3 bg-gray-50 rounded-xl border border-gray-100">
                     <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-gray-400 mb-1">
                         <Droplets className="w-3 h-3 text-blue-400" /> Humidity
                     </div>
-                    <div className="text-xl font-bold text-gray-800">!data</div>
+                    <div className="text-lg font-bold text-gray-800">
+                        {humidity ? `${humidity.toFixed(1)}%` : "0.0%"}
+                    </div>
                 </div>
 
 

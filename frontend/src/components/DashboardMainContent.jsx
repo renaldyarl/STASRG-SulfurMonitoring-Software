@@ -40,31 +40,55 @@ const DashboardMainContent = () => {
 
     // ── Live: WebSocket ──────────────────────────────────────────────────
     useEffect(() => {
-        const ws = new WebSocket("ws://127.0.0.1:8000/api/ws/sensors");
+        let ws;
+        let reconnectTimeout;
+        let isDisposed = false;
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            const nodeId = data.node_id || 1;
-            setNodesData((prev) => ({
-                ...prev,
-                [nodeId]: {
-                    so2: data.so2 || 0,
-                    h2s: data.h2s || 0,
-                    wind_speed: data.wind_speed || 0,
-                    wind_dir: data.wind_dir || 0,
-                    bus_voltage: data.bus_voltage || 0,
-                    current_ma: data.current_ma || 0,
-                    temp: data.temp || 0,
-                    humidity: data.humidity || 0,
-                    timestamp: data.timestamp,
-                    _receivedAt: Date.now(),
-                },
-            }));
+        const connect = () => {
+            if (isDisposed) return;
+            console.log("Dashboard: Connecting to WebSocket...");
+            const wsHost = "127.0.0.1:8000";
+            ws = new WebSocket(`ws://${wsHost}/api/ws/sensors`);
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                const nodeId = data.node_id || 1;
+                setNodesData((prev) => ({
+                    ...prev,
+                    [nodeId]: {
+                        so2: data.so2 || 0,
+                        h2s: data.h2s || 0,
+                        wind_speed: data.wind_speed || 0,
+                        wind_dir: data.wind_dir || 0,
+                        bus_voltage: data.bus_voltage || 0,
+                        current_ma: data.current_ma || 0,
+                        temp: data.temp || 0,
+                        humidity: data.humidity || 0,
+                        timestamp: data.timestamp,
+                        _receivedAt: Date.now(),
+                    },
+                }));
+            };
+
+            ws.onerror = (err) => {
+                console.error("Dashboard WebSocket Error:", err);
+            };
+
+            ws.onclose = () => {
+                console.log("Dashboard WebSocket Connection Closed. Reconnecting in 3s...");
+                if (!isDisposed) {
+                    reconnectTimeout = setTimeout(connect, 3000);
+                }
+            };
         };
 
-        ws.onerror = (err) => console.error("WebSocket Error:", err);
-        ws.onclose = () => console.log("WebSocket Connection Closed");
-        return () => ws.close();
+        connect();
+
+        return () => {
+            isDisposed = true;
+            if (ws) ws.close();
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        };
     }, []);
 
     // Ticking clock so a node flips back to inactive once its data goes stale.

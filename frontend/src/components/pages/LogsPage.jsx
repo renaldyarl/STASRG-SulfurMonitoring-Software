@@ -243,16 +243,20 @@ const LogsPage = () => {
     // ── Fetch data from backend ──────────────────────────────────────────
     const loadData = useCallback(async () => {
         try {
-            const res = await api.get("/logs", {
+            const res = await api.get("/readings", {
                 params: { hours: timeRange, node_id: selectedNode.id },
             });
-            const backendData = res.data.map((d) => ({
-                ...d,
-                label: new Date(d.timestamp).toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                }),
-            }));
+            const backendData = res.data.readings.map((d) => {
+                const ts = d.timestamp || d.time;
+                return {
+                    ...d,
+                    timestamp: ts,
+                    label: new Date(ts).toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                    }),
+                };
+            });
             setLogsData(backendData);
         } catch (err) {
             console.error("Failed to fetch logs from backend:", err);
@@ -268,40 +272,63 @@ const LogsPage = () => {
     useEffect(() => {
         if (!isLive) return;
 
-        const ws = new WebSocket("ws://127.0.0.1:8000/api/ws/sensors");
+        let ws;
+        let reconnectTimeout;
+        let isDisposed = false;
 
-        ws.onmessage = (event) => {
-            const d = JSON.parse(event.data);
-            // Only accept data for the currently selected node
-            const incomingNodeId = d.node_id || 1;
-            if (String(incomingNodeId) !== String(selectedNode.id)) return;
+        const connect = () => {
+            if (isDisposed) return;
+            console.log("LogsPage: Connecting to WebSocket...");
+            const wsHost = "127.0.0.1:8000";
+            ws = new WebSocket(`ws://${wsHost}/api/ws/sensors`);
 
-            const now = new Date();
-            const point = {
-                timestamp: now.toISOString(),
-                label: now.toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                }),
-                so2: d.so2 || 0,
-                h2s: d.h2s || 0,
-                temp: d.temp || 0,
-                humidity: d.humidity || 0,
+            ws.onmessage = (event) => {
+                const d = JSON.parse(event.data);
+                // Only accept data for the currently selected node
+                const incomingNodeId = d.node_id || 1;
+                if (String(incomingNodeId) !== String(selectedNode.id)) return;
+
+                const now = new Date();
+                const point = {
+                    timestamp: now.toISOString(),
+                    label: now.toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                    }),
+                    so2: d.so2 || 0,
+                    h2s: d.h2s || 0,
+                    temp: d.temp || 0,
+                    humidity: d.humidity || 0,
+                };
+
+                setLogsData((prev) => {
+                    const updated = [...prev, point];
+                    // Keep last 200 points to avoid memory bloat
+                    if (updated.length > 200) updated.shift();
+                    return updated;
+                });
             };
 
-            setLogsData((prev) => {
-                const updated = [...prev, point];
-                // Keep last 200 points to avoid memory bloat
-                if (updated.length > 200) updated.shift();
-                return updated;
-            });
+            ws.onerror = (err) => {
+                console.error("Logs WS Error:", err);
+            };
+
+            ws.onclose = () => {
+                console.log("Logs WS Closed. Reconnecting in 3s...");
+                if (!isDisposed) {
+                    reconnectTimeout = setTimeout(connect, 3000);
+                }
+            };
         };
 
-        ws.onerror = (err) => console.error("Logs WS Error:", err);
-        ws.onclose = () => console.log("Logs WS Closed");
+        connect();
 
-        return () => ws.close();
+        return () => {
+            isDisposed = true;
+            if (ws) ws.close();
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        };
     }, [isLive, selectedNode]);
 
     // ── CSV download ─────────────────────────────────────────────────────

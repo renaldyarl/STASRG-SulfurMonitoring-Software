@@ -5,7 +5,7 @@ import os
 
 # --- Configuration ---
 # Common Linux ports: '/dev/ttyUSB0' or '/dev/ttyACM0'
-SERIAL_PORT = '/dev/ttyACM0'
+SERIAL_PORT = 'COM7'
 BAUD_RATE = 115200
 JSON_FILE = 'sensor_data.json'
 

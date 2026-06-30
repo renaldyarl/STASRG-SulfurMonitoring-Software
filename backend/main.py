@@ -11,7 +11,8 @@ async def lifespan(app: FastAPI):
     print("--- APP STARTUP ---")
     print("Loading ML models...")
     load_all_models()
-    await init_db()
+    import asyncio
+    asyncio.create_task(init_db())
     start_serial_worker()
     yield
     print("--- APP SHUTDOWN ---")
@@ -27,7 +28,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import RedirectResponse
+
 app.include_router(api_router, prefix="/api")
+
+@app.get("/")
+def read_root():
+    return RedirectResponse(url="/docs")
 
 if __name__ == "__main__":
     # Use the string "main:app" to allow the reloader to work properly

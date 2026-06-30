@@ -47,8 +47,8 @@ async def ingest_reading(data: dict):
     await manager.broadcast(data)
     await crud.save_reading(data)
 
-# --- UBAH SERIAL PORT SESUSAI OS DAN MICROCONTROLLER ---
-SERIAL_PORT = "/dev/ttyACM0"  # ESP32C3
+# --- UBAH SERIAL PORT SESUAI OS DAN MICROCONTROLLER INI dalam linux Masukan /dev/ttyUSB0 untuk HELTEC ESP32S3 dan untuk ESP32C3 akan COM3 ---
+SERIAL_PORT = "COM7"  # ESP32C3 
 # SERIAL_PORT = "/dev/ttyUSB0" # HELTEC ESP32S3
 BAUD_RATE = 115200
 
@@ -56,49 +56,64 @@ BAUD_RATE = 115200
 def serial_to_websocket_task(loop):
     global serial_instance
 
-    with serial_lock:
-        if serial_instance is not None:
-            print("Serial already running, skipping duplicate thread.")
-            return
+    print("Starting serial worker thread...")
+    while True:
+        # Check if we need to open the connection
+        if serial_instance is None:
+            with serial_lock:
+                try:
+                    serial_instance = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+                    serial_instance.reset_input_buffer()
+                    print(f"--- SUCCESS: Serial Port Opened on {SERIAL_PORT} ---")
+                except Exception as e:
+                    print(f"Failed to open Serial on {SERIAL_PORT}: {e}. Retrying in 5 seconds...")
+                    serial_instance = None
+            
+            if serial_instance is None:
+                time.sleep(5)
+                continue
 
+        # We have an open serial_instance. Read from it.
         try:
-            serial_instance = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-            serial_instance.reset_input_buffer()
-            print(f"--- SUCCESS: Serial Port Opened on {SERIAL_PORT} ---")
-        except Exception as e:
-            print(f"Failed to open Serial: {e}")
-            return
-
-    try:
-        while True:
             if serial_instance.in_waiting > 0:
                 line = (
                     serial_instance.readline().decode("utf-8", errors="ignore").strip()
                 )
+                if not line:
+                    continue
                 parts = line.split(",")
-                if len(parts) == 8:
-                    data = {
-                        "node_id": parts[0].strip(),
-                        "so2": float(parts[1]),
-                        "h2s": float(parts[2]),
-                        "temp": float(parts[3]),
-                        "humidity": float(parts[4]),
-                        "wind_speed": float(parts[5]),
-                        "bus_voltage": float(parts[6]),
-                        "current_ma": float(parts[7]),
-                        "lat": -6.973235,
-                        "lng": 107.632604,
-                        "wind_dir": 0,
-                        "timestamp": time.time(),
-                    }
-                    asyncio.run_coroutine_threadsafe(ingest_reading(data), loop)
-    except Exception as e:
-        print(f"Serial Loop Error: {e}")
-    finally:
-        with serial_lock:
-            if serial_instance:
-                serial_instance.close()
-                serial_instance = None
+                if len(parts) == 7:
+                    try:
+                        data = {
+                            "node_id": "1",          
+                            "so2": float(parts[0]),
+                            "h2s": float(parts[1]),
+                            "temp": float(parts[2]),
+                            "humidity": float(parts[3]),
+                            "wind_speed": float(parts[4]),
+                            "bus_voltage": float(parts[5]),
+                            "current_ma": float(parts[6]),
+                            "lat": -6.973235,
+                            "lng": 107.632604,
+                            "wind_dir": 0,
+                            "timestamp": time.time(),
+                        }
+                        asyncio.run_coroutine_threadsafe(ingest_reading(data), loop)
+                    except ValueError as ve:
+                        print(f"Skipping malformed float conversion: '{line}' ({ve})")
+            else:
+                # Small sleep to prevent high CPU usage when no data is waiting
+                time.sleep(0.1)
+        except Exception as e:
+            print(f"Serial read error on {SERIAL_PORT}: {e}. Disconnecting and retrying in 5 seconds...")
+            with serial_lock:
+                if serial_instance:
+                    try:
+                        serial_instance.close()
+                    except:
+                        pass
+                    serial_instance = None
+            time.sleep(5)
 
 
 def start_serial_worker():
@@ -176,11 +191,17 @@ async def list_predictions(
 
 @router.websocket("/ws/sensors")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    print("--- WebSocket: Connection request received ---")
     try:
+        await manager.connect(websocket)
+        print("--- WebSocket: Connection accepted and established ---")
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        print("--- WebSocket: Client disconnected gracefully ---")
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"--- WebSocket: Error in handler: {e} ---")
         manager.disconnect(websocket)
 
 
