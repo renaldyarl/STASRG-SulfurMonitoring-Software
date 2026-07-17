@@ -58,16 +58,96 @@ function getTileGridBounds(center, zoom = LOCKED_ZOOM, tiles = GRID_TILES) {
 
 // ─── Map view updater ───────────────────────────────────────────────────────
 // Fit the 4x4 tile grid to fill the whole panel; re-fit when the panel resizes.
-function FitGrid({ bounds }) {
+// Fit-size helper to ensure Leaflet renders correctly when container sizes settle.
+function MapResizer() {
     const map = useMap();
     useEffect(() => {
-        const fit = () => map.fitBounds(bounds, { padding: [0, 0], animate: false });
-        fit();
-        map.on("resize", fit);
-        return () => map.off("resize", fit);
-    }, [bounds, map]);
+        const resize = () => map.invalidateSize();
+        resize();
+        const timer = setTimeout(resize, 200); // Tunggu rendering kontainer selesai
+        map.on("resize", resize);
+        return () => {
+            clearTimeout(timer);
+            map.off("resize", resize);
+        };
+    }, [map]);
     return null;
 }
+
+// ─── Wind Flow Overlay ──────────────────────────────────────────────────────
+const WindFlowOverlay = ({ nodesData }) => {
+    // Hitung rata-rata wind_dir dan wind_speed dari node yang ada datanya
+    const activeNodes = Object.values(nodesData).filter(n => n && n.wind_speed > 0);
+    if (activeNodes.length === 0) return null;
+
+    // Rata-rata sederhana
+    const avgWindDir = activeNodes.reduce((acc, curr) => acc + (curr.wind_dir || 0), 0) / activeNodes.length;
+    const avgWindSpeed = activeNodes.reduce((acc, curr) => acc + (curr.wind_speed || 0), 0) / activeNodes.length;
+
+    if (avgWindSpeed < 0.1) return null;
+
+    // Buat partikel awan transparan (angin)
+    const particles = Array.from({ length: 25 }).map((_, i) => {
+        const top = Math.random() * 100;
+        const delay = Math.random() * 5;
+        // Makin kencang angin, durasi melintas makin pendek (makin cepat)
+        const duration = Math.max(2, 20 / avgWindSpeed) + Math.random() * 3;
+        // Ukuran partikel (ada yang seperti awan tipis, ada yang seperti garis angin)
+        const isCloud = Math.random() > 0.5;
+        const width = isCloud ? Math.random() * 100 + 50 : Math.random() * 150 + 100;
+        const height = isCloud ? Math.random() * 20 + 10 : Math.random() * 2 + 1;
+        const opacity = isCloud ? 0.15 : 0.3;
+        const blur = isCloud ? 10 : 2;
+
+        return { id: i, top, delay, duration, width, height, opacity, blur };
+    });
+
+    return (
+        <div className="absolute inset-0 pointer-events-none z-[400] overflow-hidden">
+            <div 
+                className="absolute"
+                style={{ 
+                    width: '200%', height: '200%', left: '-50%', top: '-50%',
+                    // Konversi arah mata angin meteorologis (arah datangnya angin)
+                    // ke sudut rotasi CSS agar animasi awan bergerak ke arah yang benar.
+                    // Default gerakan awan adalah dari kiri ke kanan (Barat -> Timur, yaitu 270 derajat).
+                    transform: `rotate(${(avgWindDir + 90) % 360}deg)`,
+                    transition: 'transform 2s ease'
+                }}
+            >
+                {particles.map(p => (
+                    <div 
+                        key={p.id}
+                        className="absolute bg-white rounded-full animate-wind-flow"
+                        style={{
+                            top: `${p.top}%`,
+                            left: `-10%`,
+                            width: `${p.width}px`,
+                            height: `${p.height}px`,
+                            opacity: p.opacity,
+                            filter: `blur(${p.blur}px)`,
+                            animationDuration: `${p.duration}s`,
+                            animationDelay: `${p.delay}s`
+                        }}
+                    />
+                ))}
+            </div>
+            <style>{`
+                @keyframes wind-flow {
+                    0% { transform: translateX(0); opacity: 0; }
+                    10% { opacity: 1; }
+                    90% { opacity: 1; }
+                    100% { transform: translateX(120vw); opacity: 0; }
+                }
+                .animate-wind-flow {
+                    animation-name: wind-flow;
+                    animation-timing-function: linear;
+                    animation-iteration-count: infinite;
+                }
+            `}</style>
+        </div>
+    );
+};
 
 // ─── Component ──────────────────────────────────────────────────────────────
 const GpsDashboard = ({
@@ -86,11 +166,11 @@ const GpsDashboard = ({
     const now = useNow();
 
     return (
-        <div className="w-full h-full min-h-125 z-0">
+        <div className="w-full h-full min-h-125 relative overflow-hidden bg-[#1e293b]">
             <MapContainer
                 center={mapCenter}
-                zoom={LOCKED_ZOOM}
-                minZoom={16}
+                zoom={18}
+                minZoom={18}
                 maxZoom={18}
                 dragging={false}
                 scrollWheelZoom={false}
@@ -98,20 +178,20 @@ const GpsDashboard = ({
                 touchZoom={false}
                 boxZoom={false}
                 keyboard={false}
-                style={{ height: "100%", width: "100%" }}
+                style={{ height: "100%", width: "100%", zIndex: 0 }}
                 zoomControl={false}
                 attributionControl={true}
             >
                 {/* Tiles (Esri World Imagery) are served from public/tiles (bundled)
-                    so the map works fully offline. Run `npm run tiles` to populate. */}
+                   so the map works fully offline. Run `npm run tiles` to populate. */}
                 <TileLayer
                     url="/tiles/{z}/{x}/{y}.jpg"
-                    minZoom={16}
+                    minZoom={18}
                     maxZoom={18}
                     attribution="&copy; Esri"
                     errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
                 />
-                <FitGrid bounds={gridBounds} />
+                <MapResizer />
 
                 {sensorNodes.map((node) => {
                     const nodeData = nodesData[node.id];
@@ -191,6 +271,9 @@ const GpsDashboard = ({
                     );
                 })}
             </MapContainer>
+            
+            {/* Animasi Awan Angin Dinamis yang menutupi peta */}
+            <WindFlowOverlay nodesData={nodesData} />
         </div>
     );
 };

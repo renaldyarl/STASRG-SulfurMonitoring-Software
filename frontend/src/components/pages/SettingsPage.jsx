@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import api from "../../lib/api";
 import { 
     Server, 
@@ -13,6 +13,7 @@ import {
     RefreshCw, 
     Radio 
 } from "lucide-react";
+import { useSimulator } from "../../contexts/SimulatorContext";
 
 // SENSOR NODES matching SENSOR_NODES in other components
 const SENSOR_NODES = [
@@ -48,15 +49,16 @@ const SettingsPage = () => {
     const [formStatus, setFormStatus] = useState({ type: null, message: "" });
     const [formLoading, setFormLoading] = useState(false);
 
-    // Auto Simulator State
-    const [isSimulating, setIsSimulating] = useState(false);
-    const [simulatedNodes, setSimulatedNodes] = useState("all"); // 'all' or specific node ID
-    const [packetsSent, setPacketsSent] = useState(0);
-    const [simSpeed, setSimSpeed] = useState(1); // readings per second
-
-    // Refs for simulation loop
-    const simIntervalRef = useRef(null);
-    const simStateRef = useRef({}); // stores current values for each node to do random walk
+    // Auto Simulator State from Context
+    const { 
+        isSimulating, 
+        toggleSimulation, 
+        simulatedNodes, 
+        setSimulatedNodes, 
+        packetsSent, 
+        simSpeed, 
+        setSimSpeed 
+    } = useSimulator();
 
     // ── Check Backend & Serial Connection Status ────────────────────────
     const checkSystemStatus = useCallback(async () => {
@@ -84,23 +86,6 @@ const SettingsPage = () => {
         const interval = setInterval(checkSystemStatus, 8000);
         return () => clearInterval(interval);
     }, [checkSystemStatus]);
-
-    // Initialize simulation random walk state
-    useEffect(() => {
-        const initialState = {};
-        SENSOR_NODES.forEach(n => {
-            initialState[n.id] = {
-                so2: 15.0 + Math.random() * 20,
-                h2s: 10.0 + Math.random() * 15,
-                temp: 22.0 + Math.random() * 8,
-                humidity: 60 + Math.floor(Math.random() * 20),
-                wind_speed: 1.0 + Math.random() * 5,
-                bus_voltage: 4.5 + Math.random() * 0.6,
-                current_ma: 100.0 + Math.random() * 80,
-            };
-        });
-        simStateRef.current = initialState;
-    }, []);
 
     // ── Handle Manual Ingestion Form ────────────────────────────────────
     const handleInputChange = (e) => {
@@ -147,87 +132,6 @@ const SettingsPage = () => {
             setFormLoading(false);
         }
     };
-
-    // ── Simulation Engine ───────────────────────────────────────────────
-    const runSimulationStep = useCallback(async () => {
-        // 1. Choose node to simulate
-        let targetNodeId;
-        if (simulatedNodes === "all") {
-            const index = Math.floor(Math.random() * SENSOR_NODES.length);
-            targetNodeId = SENSOR_NODES[index].id;
-        } else {
-            targetNodeId = simulatedNodes;
-        }
-
-        // 2. Perform random walk on node values
-        const currentVals = simStateRef.current[targetNodeId] || { ...INITIAL_FORM_STATE };
-        const nextVals = {
-            so2: Math.max(0, Math.min(500, currentVals.so2 + (Math.random() - 0.5) * 8)),
-            h2s: Math.max(0, Math.min(300, currentVals.h2s + (Math.random() - 0.5) * 5)),
-            temp: Math.max(15, Math.min(42, currentVals.temp + (Math.random() - 0.5) * 0.4)),
-            humidity: Math.max(25, Math.min(100, currentVals.humidity + (Math.random() - 0.5) * 2)),
-            wind_speed: Math.max(0, Math.min(18, currentVals.wind_speed + (Math.random() - 0.5) * 0.8)),
-            bus_voltage: Math.max(3.3, Math.min(5.5, currentVals.bus_voltage + (Math.random() - 0.5) * 0.08)),
-            current_ma: Math.max(20, Math.min(280, currentVals.current_ma + (Math.random() - 0.5) * 12)),
-        };
-
-        // Update reference state
-        simStateRef.current[targetNodeId] = nextVals;
-
-        // 3. Post data
-        try {
-            const payload = {
-                node_id: String(targetNodeId),
-                so2: parseFloat(nextVals.so2.toFixed(2)),
-                h2s: parseFloat(nextVals.h2s.toFixed(3)),
-                temp: parseFloat(nextVals.temp.toFixed(1)),
-                humidity: parseFloat(nextVals.humidity.toFixed(1)),
-                wind_speed: parseFloat(nextVals.wind_speed.toFixed(1)),
-                bus_voltage: parseFloat(nextVals.bus_voltage.toFixed(2)),
-                current_ma: parseFloat(nextVals.current_ma.toFixed(1)),
-                lat: targetNodeId === "r" ? -7.167099 : -7.166098,
-                lng: targetNodeId === "r" ? 107.404272 : 107.402478,
-                wind_dir: Math.floor(Math.random() * 360),
-            };
-
-            await api.post("/ingest", payload);
-            setPacketsSent(p => p + 1);
-        } catch (err) {
-            console.error("Simulation ingestion failed:", err);
-        }
-    }, [simulatedNodes]);
-
-    // Handle simulation start/stop toggle
-    const toggleSimulation = () => {
-        if (isSimulating) {
-            clearInterval(simIntervalRef.current);
-            simIntervalRef.current = null;
-            setIsSimulating(false);
-        } else {
-            setIsSimulating(true);
-            const intervalMs = 1000 / simSpeed;
-            simIntervalRef.current = setInterval(runSimulationStep, intervalMs);
-        }
-    };
-
-    // Restart timer when speed or node selection changes
-    useEffect(() => {
-        if (isSimulating) {
-            clearInterval(simIntervalRef.current);
-            const intervalMs = 1000 / simSpeed;
-            simIntervalRef.current = setInterval(runSimulationStep, intervalMs);
-        }
-        return () => {
-            if (simIntervalRef.current) clearInterval(simIntervalRef.current);
-        };
-    }, [isSimulating, simSpeed, runSimulationStep]);
-
-    // Clean up simulation timer on unmount
-    useEffect(() => {
-        return () => {
-            if (simIntervalRef.current) clearInterval(simIntervalRef.current);
-        };
-    }, []);
 
     return (
         <div className="space-y-6 pb-8">

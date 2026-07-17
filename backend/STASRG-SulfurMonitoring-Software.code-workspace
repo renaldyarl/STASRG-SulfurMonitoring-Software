@@ -4,7 +4,7 @@
 			"path": ".."
 		},
 		{
-			"path": "../../STASRG-SulfurMonitoring-Firmware-main"
+			"path": "../../STASRG-SulfurMonitoring-Firmware"
 		}
 	],
 	"settings": {}
