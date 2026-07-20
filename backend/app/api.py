@@ -4,12 +4,25 @@ import json
 import serial
 import time
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Security, HTTPException, status, Depends
+from fastapi.security import APIKeyHeader
+import os
 from pydantic import BaseModel
 from app.ml_service import predict, predict_all_nodes, get_loaded_node_ids, build_features
 from app import crud
 
 router = APIRouter()
+
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+SECRET_API_KEY = os.getenv("API_KEY", "stasrg-admin-123")
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header == SECRET_API_KEY:
+        return api_key_header
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN, detail="Could not validate API KEY"
+    )
 
 serial_instance = None
 serial_lock = threading.Lock()
@@ -159,7 +172,7 @@ class ReadingIn(BaseModel):
 
 
 @router.post("/ingest")
-async def ingest(reading: ReadingIn):
+async def ingest(reading: ReadingIn, api_key: str = Depends(get_api_key)):
     """Dev/seed ingestion: push a reading through broadcast + persistence,
     exactly like a line read from the serial port. Lets you drive the
     dashboard and fill the DB without ESP32 hardware."""

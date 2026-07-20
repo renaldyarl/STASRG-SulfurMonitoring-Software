@@ -9,6 +9,7 @@ import DashboardMainContent from "./DashboardMainContent";
 import LogsPage from "./pages/LogsPage";
 import SensorsPage from "./pages/SensorsPage";
 import SettingsPage from "./pages/SettingsPage";
+import InfoPage from "./pages/InfoPage";
 
 const DashboardLayout = () => {
   return (
@@ -23,6 +24,7 @@ const DashboardLayout = () => {
               <Route path="/" element={<DashboardMainContent />} />
               <Route path="/sensors" element={<SensorsPage />} />
               <Route path="/history" element={<LogsPage />} />
+              <Route path="/info" element={<InfoPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>

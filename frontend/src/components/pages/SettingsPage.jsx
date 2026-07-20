@@ -117,7 +117,7 @@ const SettingsPage = () => {
                 wind_dir: Math.floor(Math.random() * 360),
             };
 
-            await api.post("/ingest", payload);
+            await api.post("/ingest", payload, { headers: { "X-API-Key": "stasrg-admin-123" } });
             setFormStatus({
                 type: "success",
                 message: `Successfully ingested data for Node ${formData.node_id}!`,

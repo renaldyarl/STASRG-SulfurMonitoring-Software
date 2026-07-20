@@ -180,7 +180,7 @@ const GpsDashboard = ({
                 keyboard={false}
                 style={{ height: "100%", width: "100%", zIndex: 0 }}
                 zoomControl={false}
-                attributionControl={true}
+                attributionControl={false}
             >
                 {/* Tiles (Esri World Imagery) are served from public/tiles (bundled)
                    so the map works fully offline. Run `npm run tiles` to populate. */}

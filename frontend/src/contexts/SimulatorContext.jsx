@@ -85,7 +85,7 @@ export const SimulatorProvider = ({ children }) => {
                 wind_dir: Math.floor(Math.random() * 360),
             };
 
-            await api.post("/ingest", payload);
+            await api.post("/ingest", payload, { headers: { "X-API-Key": "stasrg-admin-123" } });
             setPacketsSent(p => p + 1);
         } catch (err) {
             console.error("Simulation ingestion failed:", err);
