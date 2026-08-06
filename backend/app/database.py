@@ -1,10 +1,3 @@
-"""Async SQLAlchemy engine, session factory, and startup/shutdown helpers.
-
-DB failures at startup are intentionally non-fatal: the app still boots and
-simply serves no persistence (mirroring the serial-open-fail behavior in
-api.py). The `db_ready` flag lets CRUD calls no-op when the DB never came up.
-"""
-
 import logging
 
 from sqlalchemy.exc import SQLAlchemyError

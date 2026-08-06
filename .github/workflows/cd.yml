@@ -1,0 +1,59 @@
+name: STASRG Sulfur Monitoring CD (Deployment)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  # Opsional: Jika Anda ingin CD berjalan HANYA jika CI (ci.yml) sukses,
+  # gunakan trigger workflow_run ini dan hapus on: push di atas.
+  # workflow_run:
+  #   workflows: ["STASRG Sulfur Monitoring CI"]
+  #   types:
+  #     - completed
+
+# SELURUH KODE DI BAWAH INI SAYA COMMENT (NONAKTIFKAN) SESUAI PERMINTAAN.
+# Anda tinggal menghapus tanda '#' (uncomment) jika server/hosting sudah siap digunakan.
+
+jobs:
+  # frontend-deploy:
+  #   name: Deploy Frontend
+  #   runs-on: ubuntu-latest
+  #   
+  #   # Jika di dalam satu file, ini menggunakan `needs: [frontend-ci]`
+  #   # Namun karena file ini terpisah, kita menggunakan trigger `workflow_run` (di atas)
+  #   # agar hanya jalan jika tes di CI sukses.
+  #   
+  #   steps:
+  #     - name: Checkout Repository
+  #       uses: actions/checkout@v4
+  #       
+  #     # CONTOH DEPLOY KE VERCEL (Frontend):
+  #     # - name: Deploy to Vercel
+  #       # uses: amondnet/vercel-action@v20
+  #       # with:
+  #         # vercel-token: ${{ secrets.VERCEL_TOKEN }}
+  #         # vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+  #         # vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+  #         # vercel-args: '--prod'
+  #         # working-directory: ./frontend
+
+  # backend-deploy:
+  #   name: Deploy Backend
+  #   runs-on: ubuntu-latest
+  #   
+  #   steps:
+  #     - name: Checkout Repository
+  #       uses: actions/checkout@v4
+  #
+  #     # CONTOH DEPLOY KE VPS (Virtual Private Server) MENGGUNAKAN SSH & DOCKER:
+  #     # - name: Deploy to VPS Server
+  #       # uses: appleboy/ssh-action@master
+  #       # with:
+  #         # host: ${{ secrets.SERVER_HOST }}
+  #         # username: ${{ secrets.SERVER_USERNAME }}
+  #         # key: ${{ secrets.SERVER_SSH_KEY }}
+  #         # script: |
+  #           # cd /path/to/your/project/STASRG-SulfurMonitoring-Software
+  #           # git pull origin main
+  #           # docker-compose up -d --build backend

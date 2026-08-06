@@ -1,9 +1,3 @@
-"""CRUD helpers for persisting and querying sensor readings and predictions.
-
-All write helpers are guarded by `database.db_ready` and wrapped in try/except
-so a DB hiccup never crashes the serial loop or a request handler.
-"""
-
 import logging
 from datetime import UTC, datetime
 
