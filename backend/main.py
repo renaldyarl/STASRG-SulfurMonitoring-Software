@@ -1,10 +1,14 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from app.api import router as api_router, start_serial_worker
+
+from app.api import router as api_router
+from app.api import start_serial_worker
+from app.database import dispose_db, init_db
 from app.ml_service import load_all_models
-from app.database import init_db, dispose_db
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

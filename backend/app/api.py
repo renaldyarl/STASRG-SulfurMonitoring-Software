@@ -1,17 +1,34 @@
 import asyncio
+import logging
+import os
 import threading
-import json
-import serial
 import time
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Security, HTTPException, status, Depends
+
+import serial
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Security,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.security import APIKeyHeader
-import os
 from pydantic import BaseModel
-from app.ml_service import predict, predict_all_nodes, get_loaded_node_ids, build_features
+
 from app import crud
+from app.ml_service import (
+    build_features,
+    get_loaded_node_ids,
+    predict,
+    predict_all_nodes,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Untuk API itu bisa di Sesuikan untuk ini dalam ini hanya sebuah simulasi untuk sebauh API kemanananya itu sendiri.
 API_KEY_NAME = "X-API-Key"
@@ -45,8 +62,8 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except:
-                pass
+            except (WebSocketDisconnect, RuntimeError) as exc:
+                logger.debug("Failed to send websocket message to connection: %s", exc)
 
 
 manager = ConnectionManager()
@@ -79,8 +96,8 @@ def serial_to_websocket_task(loop):
                     serial_instance = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
                     serial_instance.reset_input_buffer()
                     print(f"--- SUCCESS: Serial Port Opened on {SERIAL_PORT} ---")
-                except Exception as e:
-                    print(f"Failed to open Serial on {SERIAL_PORT}: {e}. Retrying in 5 seconds...")
+                except (serial.SerialException, OSError) as e:
+                    logger.error("Failed to open Serial on %s: %s. Retrying in 5 seconds...", SERIAL_PORT, e)
                     serial_instance = None
             
             if serial_instance is None:
@@ -118,14 +135,14 @@ def serial_to_websocket_task(loop):
             else:
                 # Small sleep to prevent high CPU usage when no data is waiting
                 time.sleep(0.1)
-        except Exception as e:
-            print(f"Serial read error on {SERIAL_PORT}: {e}. Disconnecting and retrying in 5 seconds...")
+        except (serial.SerialException, OSError, ValueError) as e:
+            logger.error("Serial read error on %s: %s. Disconnecting and retrying in 5 seconds...", SERIAL_PORT, e)
             with serial_lock:
                 if serial_instance:
                     try:
                         serial_instance.close()
-                    except:
-                        pass
+                    except (serial.SerialException, OSError) as exc:
+                        logger.warning("Failed to close serial port: %s", exc)
                     serial_instance = None
             time.sleep(5)
 
@@ -212,10 +229,10 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        print("--- WebSocket: Client disconnected gracefully ---")
+        logger.info("WebSocket client disconnected gracefully")
         manager.disconnect(websocket)
-    except Exception as e:
-        print(f"--- WebSocket: Error in handler: {e} ---")
+    except RuntimeError:
+        logger.exception("WebSocket runtime error in handler")
         manager.disconnect(websocket)
 
 

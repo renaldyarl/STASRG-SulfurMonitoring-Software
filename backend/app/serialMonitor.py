@@ -1,7 +1,8 @@
-import serial
 import json
-import time
 import os
+import time
+
+import serial
 
 # --- Configuration ---
 # Common Linux ports: '/dev/ttyUSB0' or '/dev/ttyACM0'
@@ -49,7 +50,7 @@ def parse_and_save():
                         
                 except ValueError:
                     print(f"Skipping malformed line: {line}")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     print(f"Unexpected error: {e}")
 
     except serial.SerialException as e:

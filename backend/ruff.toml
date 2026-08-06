@@ -1,0 +1,9 @@
+# Ruff configuration for STASRG Backend
+target-version = "py311"
+
+[lint]
+# Ignore rules that don't match FastAPI's design patterns or file naming conventions
+ignore = [
+    "B008",  # Do not perform function call `Query` / `Depends` in argument defaults
+    "N999",  # Invalid module name (serialMonitor uses camelCase, keeping it to avoid breaking imports)
+]

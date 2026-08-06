@@ -5,10 +5,15 @@ simply serves no persistence (mirroring the serial-open-fail behavior in
 api.py). The `db_ready` flag lets CRUD calls no-op when the DB never came up.
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+import logging
+
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -30,9 +35,9 @@ async def init_db():
             await conn.run_sync(Base.metadata.create_all)
         db_ready = True
         print("--- SUCCESS: Database connected and tables ready ---")
-    except Exception as e:
+    except SQLAlchemyError:
         db_ready = False
-        print(f"Failed to initialize database: {e}")
+        logger.exception("Failed to initialize database")
         print("--- App will run without persistence ---")
 
 

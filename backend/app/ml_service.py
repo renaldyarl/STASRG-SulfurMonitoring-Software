@@ -1,21 +1,8 @@
-"""
-ML Model Service — loads and serves XGBoost models for sensor nodes 1-6.
-Each node has its own model file: models/node_{id}_xgb.pkl
-Node R does not have a model and is excluded from predictions.
-
-Model Input Features (11):
-    ["h2s", "so2", "hum", "temp", "windspeed", "hour", "minute",
-     "minute_of_day", "h2s_diff", "so2_diff", "gas_ratio_so2_h2s"]
-
-Model Output (2):
-    ["h2s", "so2"]  — predicted future concentrations
-"""
-
-import os
 import pickle
-import numpy as np
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime
+
+import numpy as np
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
@@ -35,7 +22,6 @@ _models: dict[int, object] = {}
 
 def load_all_models():
     """Load all XGBoost models from disk into memory at startup."""
-    global _models
     loaded = 0
     for node_id in NODE_IDS:
         model_path = MODELS_DIR / f"node_{node_id}_xgb.pkl"
@@ -45,7 +31,7 @@ def load_all_models():
                     _models[node_id] = pickle.load(f)
                 print(f"  [OK] Loaded model for Node {node_id}: {model_path.name}")
                 loaded += 1
-            except Exception as e:
+            except (FileNotFoundError, pickle.UnpicklingError, ValueError, OSError) as e:
                 print(f"  [FAIL] Failed to load model for Node {node_id}: {e}")
         else:
             print(f"  [FAIL] Model file not found for Node {node_id}: {model_path}")
@@ -71,7 +57,7 @@ def build_features(
     windspeed: float,
     h2s_prev: float = 0.0,
     so2_prev: float = 0.0,
-    timestamp: datetime = None,
+    timestamp: datetime | None = None,
 ) -> list[float]:
     """
     Build the full 11-feature input vector from raw sensor readings.
@@ -83,7 +69,7 @@ def build_features(
       - gas_ratio_so2_h2s: so2 / h2s (guarded against division by zero)
     """
     if timestamp is None:
-        timestamp = datetime.now()
+        timestamp = datetime.now(UTC)
 
     hour = timestamp.hour
     minute = timestamp.minute
@@ -140,7 +126,7 @@ def predict(node_id: int, features: list[float]) -> dict:
             "features_used": dict(zip(INPUT_FEATURES, features)),
             "error": None,
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return {
             "node_id": node_id,
             "error": str(e),

@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models for persisted sensor data and ML predictions."""
 
-from sqlalchemy import Column, Integer, Float, String, DateTime, JSON, Index, func
+from sqlalchemy import JSON, Column, DateTime, Float, Index, Integer, String, func
 
 from app.database import Base
 

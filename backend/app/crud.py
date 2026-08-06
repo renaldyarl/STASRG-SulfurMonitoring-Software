@@ -4,12 +4,16 @@ All write helpers are guarded by `database.db_ready` and wrapped in try/except
 so a DB hiccup never crashes the serial loop or a request handler.
 """
 
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import database
-from app.models import SensorReading, Prediction
+from app.models import Prediction, SensorReading
+
+logger = logging.getLogger(__name__)
 
 
 async def save_reading(data: dict):
@@ -19,7 +23,7 @@ async def save_reading(data: dict):
     try:
         ts = data.get("timestamp")
         reading_time = (
-            datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
+            datetime.fromtimestamp(ts, tz=UTC) if ts else None
         )
         async with database.AsyncSessionLocal() as session:
             reading = SensorReading(
@@ -38,8 +42,8 @@ async def save_reading(data: dict):
             )
             session.add(reading)
             await session.commit()
-    except Exception as e:
-        print(f"Failed to save reading: {e}")
+    except SQLAlchemyError:
+        logger.exception("Failed to save reading")
 
 
 async def save_prediction(node_id: int, result: dict):
@@ -60,8 +64,8 @@ async def save_prediction(node_id: int, result: dict):
                 )
             )
             await session.commit()
-    except Exception as e:
-        print(f"Failed to save prediction: {e}")
+    except SQLAlchemyError:
+        logger.exception("Failed to save prediction")
 
 
 async def get_readings(node_id: str | None = None, limit: int = 100, since: datetime | None = None):
