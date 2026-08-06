@@ -13,6 +13,7 @@ from app import crud
 
 router = APIRouter()
 
+# Untuk API itu bisa di Sesuikan untuk ini dalam ini hanya sebuah simulasi untuk sebauh API kemanananya itu sendiri.
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
 SECRET_API_KEY = os.getenv("API_KEY", "stasrg-admin-123")
