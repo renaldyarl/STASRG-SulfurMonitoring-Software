@@ -1,13 +1,29 @@
-<<<<<<< HEAD
-node_modules
-dist
-.vite
-.DS_Store
-=======
-/.cache
-/.vscode
->>>>>>> 035581b73cdc64f382029971b92a0e8e8338beae
+# Environment & Secrets (HARAM Masuk Git)
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.crt
+*.cert
 
-#claude
- /.claude
- CLAUDE.md
+# Database & Logs
+pgdata/
+*.sql
+*.sqlite3
+*.log
+
+# Dependencies & Build
+node_modules/
+dist/
+.vite/
+venv/
+.venv/
+__pycache__/
+.ruff_cache/
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

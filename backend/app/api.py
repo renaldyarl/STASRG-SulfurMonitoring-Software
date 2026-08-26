@@ -33,9 +33,16 @@ logger = logging.getLogger(__name__)
 # Untuk API itu bisa di Sesuikan untuk ini dalam ini hanya sebuah simulasi untuk sebauh API kemanananya itu sendiri.
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
-SECRET_API_KEY = os.getenv("API_KEY", "stasrg-admin-123")
+# Ambil API Key murni dari Environment Variable (.env)
+SECRET_API_KEY = os.getenv("API_SECRET_KEY") or os.getenv("API_KEY")
 
 async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if not SECRET_API_KEY:
+        logger.error("API_SECRET_KEY belum dikonfigurasi di file .env!")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server API Key is not configured on the server",
+        )
     if api_key_header == SECRET_API_KEY:
         return api_key_header
     raise HTTPException(

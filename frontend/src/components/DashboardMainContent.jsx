@@ -47,8 +47,9 @@ const DashboardMainContent = () => {
         const connect = () => {
             if (isDisposed) return;
             console.log("Dashboard: Connecting to WebSocket...");
-            const wsHost = window.location.hostname === "localhost" ? "127.0.0.1:8000" : `${window.location.hostname}:8000`;
-            ws = new WebSocket(`ws://${wsHost}/api/ws/sensors`);
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${window.location.host}/api/ws/sensors`;
+            ws = new WebSocket(wsUrl);
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
