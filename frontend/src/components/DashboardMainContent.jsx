@@ -108,20 +108,21 @@ const DashboardMainContent = () => {
     }, []);
 
     return (
-        <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4 pb-2">
-            <div className="lg:col-span-8 flex flex-col relative card-panel overflow-hidden border-none shadow-[0_20px_50px_rgba(0,0,0,0.3)] min-h-125 lg:min-h-0">
-
-                <div className="absolute bottom-4 right-4 z-10 bg-white/80 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-200 text-[10px] font-mono text-gray-500 shadow-sm">
-                    {selectedNode.lat.toFixed(4)}°{selectedNode.lat >= 0 ? "N" : "S"},{" "}
-                    {selectedNode.lng.toFixed(4)}°{selectedNode.lng >= 0 ? "E" : "W"}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-4">
+            {/* Left Column: Map Dashboard */}
+            <div className="lg:col-span-8 flex flex-col relative bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden min-h-[480px] lg:min-h-[640px]">
+                {/* Live Data Badge */}
+                <div className="absolute top-3.5 left-3.5 z-10 flex items-center gap-2 bg-white/90 backdrop-blur-md rounded-full px-3 py-1 border border-slate-200/80 shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    <span className="text-[11px] text-slate-700 uppercase font-bold tracking-wider">
+                        Kawah Putih Crater
+                    </span>
                 </div>
 
-                {/* Live data indicator */}
-                <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white/80 backdrop-blur rounded-lg px-3 py-1.5 border border-gray-200 shadow-sm">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                    <span className="text-[10px] text-gray-500 uppercase font-semibold tracking-wide">
-                        Live
-                    </span>
+                {/* Node Lat/Lng Badge */}
+                <div className="absolute bottom-3.5 right-3.5 z-10 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200/80 text-[11px] font-mono text-slate-600 shadow-xs">
+                    Node {selectedNode.label}: {selectedNode.lat.toFixed(4)}°{selectedNode.lat >= 0 ? "N" : "S"},{" "}
+                    {selectedNode.lng.toFixed(4)}°{selectedNode.lng >= 0 ? "E" : "W"}
                 </div>
 
                 <GpsDashboard
@@ -132,22 +133,22 @@ const DashboardMainContent = () => {
                 />
             </div>
 
-            <div className="border border-gray-300 rounded-2xl lg:col-span-4 flex flex-col min-h-0">
-                <div className="p-5 flex flex-col justify-between shrink-0">
-
-                    {/* Node selector header */}
-                    <div className="flex items-center justify-between mb-3">
+            {/* Right Column: Node Details & Actions */}
+            <div className="lg:col-span-4 flex flex-col gap-4">
+                {/* Node Header & Gas Telemetry */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-4.5 shadow-xs">
+                    <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-100">
                         <div className="flex items-center gap-2">
-                            <h2 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                                <span className="w-1 h-4 bg-primary rounded-full"></span>
-                                NODE {selectedNode.label} DATA
+                            <div className="w-2 h-4 bg-emerald-600 rounded-full" />
+                            <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+                                NODE {selectedNode.label} TELEMETRY
                             </h2>
                             <SensorStatusBadge active={selectedActive} />
                         </div>
                         <select
                             value={selectedNode.id}
                             onChange={(e) => handleNodeSelect(e.target.value)}
-                            className="text-xs font-medium bg-gray-100 rounded-md px-2 py-1 border-none outline-none cursor-pointer text-gray-700"
+                            className="text-xs font-semibold bg-slate-100 hover:bg-slate-200/70 transition-colors rounded-lg px-2.5 py-1.5 border border-slate-200 outline-none cursor-pointer text-slate-700"
                         >
                             {SENSOR_NODES.map((n) => (
                                 <option key={n.id} value={n.id}>
@@ -157,30 +158,30 @@ const DashboardMainContent = () => {
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                         <GasCard
-                            type="SO2"
+                            type="SO2 Gas"
                             value={Number(sensorData.so2).toFixed(2)}
                             unit="µg/m³"
                             period="Live"
                             status={sensorData.so2 > 50 ? "Danger" : "Normal"}
                         />
                         <GasCard
-                            type="H2S"
+                            type="H2S Gas"
                             value={Number(sensorData.h2s).toFixed(3)}
                             unit="µg/m³"
                             period="Live"
                             status={sensorData.h2s > 50 ? "Caution" : "Normal"}
                         />
                         <GasCard
-                            type="WIND SPEED"
+                            type="Wind Speed"
                             value={Number(sensorData.wind_speed).toFixed(1)}
                             unit="m/s"
                             period="Live"
                             status="Normal"
                         />
                         <WindCard
-                            type="WIND DIRECTION"
+                            type="Wind Direction"
                             value={getWindDirection(sensorData.wind_dir)}
                             unit="°"
                             period="Live"
@@ -189,22 +190,22 @@ const DashboardMainContent = () => {
                     </div>
                 </div>
 
-                <div className="card-panel p-5 shrink-0">
+                {/* Environment & Power */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs space-y-4">
                     <EnvironmentPanel sensorData={sensorData} />
+                    <div className="pt-3 border-t border-slate-100">
+                        <DeviceInfoPanel
+                            sensorData={sensorData}
+                            position={position}
+                        />
+                    </div>
                 </div>
 
-                <div className="card-panel p-5 shrink-0">
-                    <DeviceInfoPanel
-                        sensorData={sensorData}
-                        position={position}
-                    />
-                </div>
-
-                <div className="card-panel p-5 shrink-0">
+                {/* Action Center */}
+                <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
                     <ActionCenter />
                 </div>
             </div>
-
         </div>
     );
 };
