@@ -1,12 +1,12 @@
 import React from 'react';
 import { Thermometer, Droplets, Gauge } from 'lucide-react';
 
-const EnvironmentPanel = ({sensorData}) => {
+const EnvironmentPanel = ({ sensorData }) => {
     const { temp = 0, humidity = 0 } = sensorData || {};
 
     return (
         <div className="h-full flex flex-col justify-center">
-            
+
             <h2 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
                 <span className="w-1 h-4 bg-primary rounded-full"></span>
                 ENVIRONMENT DATA

@@ -2,7 +2,7 @@ import DashboardLayout from "./components/DashboardLayout";
 
 function App() {
     return (
-        <div className="min-h-screen w-full bg-background p-4 md:p-6 flex flex-col">
+        <div className="min-h-screen w-full bg-slate-50 flex flex-col text-slate-900 antialiased">
             <DashboardLayout />
         </div>
     );
